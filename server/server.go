@@ -4,32 +4,39 @@ import (
 	"net"
 	"log"
 	"fmt"
+	"errors"
 
 	"database/sql"
 	_ "github.com/lib/pq"
 )
 
 const (
-	dbDriver 	= "postgres"
-	dbHost 		= "localhost"
-	dbPort 		= "5432"
-	dbUser		= "postgres"
-	dbName 		= "xch"
-	dbSSLMode = "disable"
+	dbDriver 		= "postgres"
+	dbHost 			= "localhost"
+	dbPort 			= "5432"
+	dbUser			= "postgres"
+	dbName 			= "xch"
+	dbSSLMode 	= "disable"
+	BUFFER_SIZE = 1024
 )
 
 
-func tr(b []byte, n int) []byte {
+// trim([]byte, int) ([]byte, error) - trims input byte slice to new byte slice of size n
+func trim(b []byte, n int) ([]byte, error) {
+	if (n > len(b)) {
+		return nil, errors.New("trimmed slice should have size smaller of or equal to origin slice")
+	}
 	result := make([]byte, n, n)
 	for i := 0; i < n; i++ {
 		result[i] = b[i]
 	}
-	return result
+	return result, nil
 }
 
+// handle(net.Conn, *sql.DB) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn, db *sql.DB) {
 	for {
-		b := make([]byte, 32)
+		b := make([]byte, BUFFER_SIZE)
 		n, err := conn.Read(b)
 		if err != nil {
 			log.Print(err)
@@ -37,9 +44,14 @@ func handle(conn net.Conn, db *sql.DB) {
 			break
 		}
 
-		b = tr(b, n)
+		// trims b to size n
+		b, err = trim(b, n)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
 
-		sqlStatement := fmt.Sprintf("INSERT INTO users (message, ip_from) VALUES ('%s', '%s');", string(b), conn.RemoteAddr().String())
+		sqlStatement := fmt.Sprintf("INSERT INTO messages (message, ip_from) VALUES ('%s', '%s');", string(b), conn.RemoteAddr().String())
 
 		fmt.Println(sqlStatement)
 
@@ -60,11 +72,12 @@ func handle(conn net.Conn, db *sql.DB) {
 }
 
 func dbPrepare(db *sql.DB) {
-	sqlStatement := `CREATE TABLE IF NOT EXISTS users 
+	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
 										(
 											id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 											message VARCHAR(255),
-											ip_from VARCHAR(255)
+											ip_from VARCHAR(255),
+											time		TIMESTAMPTZ NOT NULL DEFAULT NOW()
 										);`
 
 	_, err := db.Exec(sqlStatement)
