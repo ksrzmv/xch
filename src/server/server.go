@@ -1,29 +1,32 @@
 package main
 
 import (
-	"net"
-	"log"
-	"fmt"
 	"errors"
+	"fmt"
+	"log"
+	"net"
 
 	"database/sql"
+
 	_ "github.com/lib/pq"
 )
 
 const (
-	dbDriver 		= "postgres"
-	dbHost 			= "localhost"
-	dbPort 			= "5432"
-	dbUser			= "postgres"
-	dbName 			= "xch"
-	dbSSLMode 	= "disable"
+	dbDriver    = "postgres"
+	dbHost      = "localhost"
+	dbPort      = "5432"
+	dbUser      = "postgres"
+	dbName      = "xch"
+	dbSSLMode   = "disable"
 	BUFFER_SIZE = 1024
+	listenHost  = "localhost"
+	listenPort  = "3333"
+	listenProto = "tcp"
 )
-
 
 // trim([]byte, int) ([]byte, error) - trims input byte slice to new byte slice of size n
 func trim(b []byte, n int) ([]byte, error) {
-	if (n > len(b)) {
+	if n > len(b) {
 		return nil, errors.New("trimmed slice should have size smaller of or equal to origin slice")
 	}
 	result := make([]byte, n, n)
@@ -51,6 +54,7 @@ func handle(conn net.Conn, db *sql.DB) {
 			continue
 		}
 
+		// insert message into database
 		sqlStatement := fmt.Sprintf("INSERT INTO messages (message, ip_from) VALUES ('%s', '%s');", string(b), conn.RemoteAddr().String())
 
 		fmt.Println(sqlStatement)
@@ -75,9 +79,11 @@ func dbPrepare(db *sql.DB) {
 	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
 										(
 											id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-											message VARCHAR(255),
-											ip_from VARCHAR(255),
-											time		TIMESTAMPTZ NOT NULL DEFAULT NOW()
+											sender		UUID NOT NULL,
+											reciever	UUID NOT NULL,
+											message 	VARCHAR(255),
+											ip_from 	VARCHAR(255),
+											time			TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 										);`
 
 	_, err := db.Exec(sqlStatement)
@@ -89,7 +95,7 @@ func dbPrepare(db *sql.DB) {
 
 func main() {
 	pgConninfo := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
-														dbHost, dbPort, dbUser, dbName, dbSSLMode)
+		dbHost, dbPort, dbUser, dbName, dbSSLMode)
 	db, err := sql.Open(dbDriver, pgConninfo)
 	if err != nil {
 		log.Fatal(err)
@@ -103,10 +109,12 @@ func main() {
 
 	dbPrepare(db)
 
-	ln, err := net.Listen("tcp", "localhost:3333")
+	socket := fmt.Sprintf("%s:%s", listenHost, listenPort)
+	ln, err := net.Listen(listenProto, socket)
 	if err != nil {
 		panic(err)
 	}
+	log.Printf("start listening on %s %s\n", listenProto, socket)
 
 	for {
 		conn, err := ln.Accept()
