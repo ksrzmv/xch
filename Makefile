@@ -1,11 +1,11 @@
 server:
-	go build -o ./bin/xch-server ./server
+	go build -o ./bin/xch-server ./src/server/
 
 s:
 	make server
 
 client:
-	go build -o ./bin/xch-client ./client
+	go build -o ./bin/xch-client ./src/client
 
 c:
 	make client
