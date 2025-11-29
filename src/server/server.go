@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 
 	"database/sql"
 
+	"github.com/ksrzmv/xch/pkg/message"
 	_ "github.com/lib/pq"
 )
 
@@ -54,8 +56,20 @@ func handle(conn net.Conn, db *sql.DB) {
 			continue
 		}
 
+		var m message.Message
+		m.To = ""
+		m.From = ""
+		m.Msg = []byte("")
+
+		fmt.Println(m)
+		err = json.Unmarshal(b, &m)
+		if err != nil {
+			conn.Close()
+			log.Fatal(err)
+		}
+
 		// insert message into database
-		sqlStatement := fmt.Sprintf("INSERT INTO messages (message, ip_from) VALUES ('%s', '%s');", string(b), conn.RemoteAddr().String())
+		sqlStatement := fmt.Sprintf("INSERT INTO messages (sender, reciever, message) VALUES ('%s', '%s', '%s');", m.From, m.To, m.Msg)
 
 		fmt.Println(sqlStatement)
 
@@ -82,7 +96,6 @@ func dbPrepare(db *sql.DB) {
 											sender		UUID NOT NULL,
 											reciever	UUID NOT NULL,
 											message 	VARCHAR(255),
-											ip_from 	VARCHAR(255),
 											time			TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 										);`
 

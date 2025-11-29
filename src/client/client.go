@@ -66,13 +66,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("successfully connected to %s\n", socket)
 
-	m, err := json.Marshal(message.Message{"test", id.String(), []byte("hello")})
+	m, err := json.Marshal(message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), []byte("hello")})
 	if err != nil {
 		conn.Close()
 		log.Fatal(err)
 	}
 
-	log.Printf("successfully connected to %s\n", socket)
+	conn.Write(m)
+
 	conn.Close()
 }
