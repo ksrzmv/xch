@@ -20,7 +20,9 @@ const (
 	dbUser      = "postgres"
 	dbName      = "xch"
 	dbSSLMode   = "disable"
+
 	BUFFER_SIZE = 1024
+
 	listenHost  = "localhost"
 	listenPort  = "3333"
 	listenProto = "tcp"
@@ -56,10 +58,7 @@ func handle(conn net.Conn, db *sql.DB) {
 			continue
 		}
 
-		var m message.Message
-		m.To = ""
-		m.From = ""
-		m.Msg = []byte("")
+		m := message.Init()
 
 		fmt.Println(m)
 		err = json.Unmarshal(b, &m)
