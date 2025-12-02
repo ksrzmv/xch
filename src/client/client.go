@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -17,6 +18,8 @@ const (
 	xchPort           = "3333"
 	idFilename        = ".xch-id"
 	uuidLengthSymbols = 36
+	
+	INPUT_BUFFER			= 128
 )
 
 func getIdFromFile(filepath string) uuid.UUID {
@@ -48,6 +51,27 @@ func getIdFromFile(filepath string) uuid.UUID {
 	return id
 }
 
+func handle(conn net.Conn, id uuid.UUID) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("> ")
+
+	// TODO: possible overflow. limit the input text string.
+	// TODO: implement the multiline messages
+	b, err := reader.ReadString('\n')
+	if err != nil {
+		conn.Close()
+		log.Fatal(err)
+	}
+	fmt.Println(b)
+  m, err := json.Marshal(message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), []byte(b)})
+  if err != nil {
+  	conn.Close()
+  	log.Fatal(err)
+  }
+
+  conn.Write(m)
+}
+
 func main() {
 	homePath, isPresent := os.LookupEnv("HOME")
 	if isPresent == false {
@@ -68,13 +92,8 @@ func main() {
 	}
 	log.Printf("successfully connected to %s\n", socket)
 
-	m, err := json.Marshal(message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), []byte("hello")})
-	if err != nil {
-		conn.Close()
-		log.Fatal(err)
+	for {
+		handle(conn, id)
 	}
 
-	conn.Write(m)
-
-	conn.Close()
 }

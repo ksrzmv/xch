@@ -60,12 +60,13 @@ func handle(conn net.Conn, db *sql.DB) {
 
 		m := message.Init()
 
-		fmt.Println(m)
 		err = json.Unmarshal(b, &m)
 		if err != nil {
+			log.Println("unmarshal err")
 			conn.Close()
 			log.Fatal(err)
 		}
+		fmt.Println(m)
 
 		// insert message into database
 		sqlStatement := fmt.Sprintf("INSERT INTO messages (sender, reciever, message) VALUES ('%s', '%s', '%s');", m.From, m.To, m.Msg)
@@ -74,11 +75,13 @@ func handle(conn net.Conn, db *sql.DB) {
 
 		_, err = db.Exec(sqlStatement)
 		if err != nil {
+			log.Println("db exec error")
 			log.Println(err)
 		}
 
 		conn.Write(b)
 		if err != nil {
+			log.Println("conn write error")
 			log.Print(err)
 			conn.Close()
 			break
