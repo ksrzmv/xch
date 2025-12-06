@@ -39,40 +39,61 @@ func trim(b []byte, n int) ([]byte, error) {
 	return result, nil
 }
 
+func readMessageFromClient(conn net.Conn) (*message.Message, error) {
+	m := message.Init()
+
+	// read client's input
+	readBuf := make([]byte, BUFFER_SIZE)
+	n, err := conn.Read(readBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	// trims b to size n
+	readBuf, err = trim(readBuf, n)
+	if err != nil {
+		return nil, err
+	}
+
+	// unmarshal input message
+	m, err = message.FromJson([]byte(readBuf))
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func sendMessageToClient(conn net.Conn, m *message.Message) error {
+	sendBuf, err := m.ToJson()
+	if err != nil {
+		return err
+	}
+	conn.Write(sendBuf)
+	if err != nil {
+		return err
+	}
+	log.Printf("send message '%s' to client", sendBuf)
+	return nil
+}
+
 // handle(net.Conn, *sql.DB) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
 	db := dbConnect()
 	for {
-		m := message.Init()
-		readBuf := make([]byte, BUFFER_SIZE)
-
-		n, err := conn.Read(readBuf)
+		m, err := readMessageFromClient(conn)
 		if err != nil {
 			log.Println(err)
 			conn.Close()
 			break
 		}
-
-		// trims b to size n
-		readBuf, err = trim(readBuf, n)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		m, err = message.FromJson([]byte(readBuf))
-		if err != nil {
-			log.Println(err)
-			conn.Close()
-			break
-		}
+		// prints unmarshalled message to stdout
 		fmt.Println(*m)
 
 		// insert message into database
 		sqlStatement := `
-					INSERT INTO messages (sender, reciever, message) VALUES ($1, $2, $3)
-					RETURNING id`
-
+											INSERT INTO messages (sender, reciever, message) VALUES ($1, $2, $3)
+											RETURNING id;
+										`
 		_, err = db.Exec(sqlStatement, m.From, m.To, m.Msg)
 		if err != nil {
 			log.Println(err)
@@ -80,15 +101,15 @@ func handle(conn net.Conn) {
 			break
 		}
 
+		// sends ack to client
 		sendBuf := []byte("ok")
-		conn.Write(sendBuf)
+		sendMessage := message.Message{"0", m.From, sendBuf}
+		err = sendMessageToClient(conn, &sendMessage)
 		if err != nil {
 			log.Println(err)
 			conn.Close()
 			break
 		}
-		log.Printf("send message '%s' to client", sendBuf)
-
   }
 	
 }
@@ -96,13 +117,17 @@ func handle(conn net.Conn) {
 func dbConnect() *sql.DB {
 	pgConninfo := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbName, dbSSLMode)
+	// connect to db
 	db, err := sql.Open(dbDriver, pgConninfo)
 	if err != nil {
+		db.Close()
 		log.Fatal(err)
 	}
 
+	// pings db to ensure that's we've successfully connected
 	err = db.Ping()
 	if err != nil {
+		db.Close()
 		log.Fatal(err)
 	}
 	log.Println("db successfully connected")
@@ -110,6 +135,7 @@ func dbConnect() *sql.DB {
 	return db
 }
 
+// create messages table
 func dbPrepare(db *sql.DB) {
 	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
 										(
@@ -128,6 +154,7 @@ func dbPrepare(db *sql.DB) {
 	log.Println("database prepared")
 }
 
+// listen on socket
 func listen() net.Listener {
 	socket := fmt.Sprintf("%s:%s", listenHost, listenPort)
 	ln, err := net.Listen(listenProto, socket)
