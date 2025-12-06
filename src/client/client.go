@@ -18,8 +18,6 @@ const (
 	xchPort           = "3333"
 	idFilename        = ".xch-id"
 	uuidLengthSymbols = 36
-	
-	INPUT_BUFFER			= 128
 )
 
 func getIdFromFile(filepath string) uuid.UUID {
@@ -65,29 +63,14 @@ func handle(conn net.Conn, id uuid.UUID) {
 	
 	// trims trailing '\n'
 	sendBuf := []byte(readBuf)[:len(readBuf)-1]
-	m := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
-	sendBuf, err = m.ToJson()
-  if err != nil {
-  	conn.Close()
-  	log.Fatal(err)
-  }
-
-  conn.Write(sendBuf)
-
-	answerBuf := make([]byte, 1024)
-	readBytes, err := conn.Read(answerBuf)
+	sendMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
+	err = misc.SendMessageTo(conn, &sendMessage)
 	if err != nil {
 		conn.Close()
 		log.Fatal(err)
 	}
 
-	answerBuf, err = misc.Trim(answerBuf, readBytes)
-	if err != nil {
-		conn.Close()
-		log.Fatal()
-	}
-
-	recvMessage, err := message.FromJson(answerBuf)
+	recvMessage, err := misc.ReadMessageFrom(conn)
 	if err != nil {
 		conn.Close()
 		log.Fatal(err)

@@ -5,8 +5,6 @@ import (
 	"log"
 	"net"
 
-	"database/sql"
-
 	"github.com/ksrzmv/xch/pkg/message"
 	"github.com/ksrzmv/xch/pkg/misc"
 	_ "github.com/lib/pq"
@@ -20,55 +18,16 @@ const (
 	dbName      = "xch"
 	dbSSLMode   = "disable"
 
-	BUFFER_SIZE = 1024
-
 	listenHost  = "localhost"
 	listenPort  = "3333"
 	listenProto = "tcp"
 )
 
-func readMessageFromClient(conn net.Conn) (*message.Message, error) {
-	m := message.Init()
-
-	// read client's input
-	readBuf := make([]byte, BUFFER_SIZE)
-	n, err := conn.Read(readBuf)
-	if err != nil {
-		return nil, err
-	}
-
-	// trims b to size n
-	readBuf, err = misc.Trim(readBuf, n)
-	if err != nil {
-		return nil, err
-	}
-
-	// unmarshal input message
-	m, err = message.FromJson([]byte(readBuf))
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func sendMessageToClient(conn net.Conn, m *message.Message) error {
-	sendBuf, err := m.ToJson()
-	if err != nil {
-		return err
-	}
-	conn.Write(sendBuf)
-	if err != nil {
-		return err
-	}
-	log.Printf("send message '%s' to client", sendBuf)
-	return nil
-}
-
-// handle(net.Conn, *sql.DB) - handles client connections: reply to requests, stores info in DB
+// handle(net.Conn) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
 	db := dbConnect()
 	for {
-		m, err := readMessageFromClient(conn)
+		m, err := misc.ReadMessageFrom(conn)
 		if err != nil {
 			log.Println(err)
 			conn.Close()
@@ -92,54 +51,15 @@ func handle(conn net.Conn) {
 		// sends ack to client
 		sendBuf := []byte("ok")
 		sendMessage := message.Message{m.From, "00000000-0000-0000-0000-000000000000", sendBuf}
-		err = sendMessageToClient(conn, &sendMessage)
+		err = misc.SendMessageTo(conn, &sendMessage)
 		if err != nil {
 			log.Println(err)
 			conn.Close()
 			break
 		}
+		log.Printf("sent message `%s` to `%s`\n", sendMessage.GetMessage(), m.From)
   }
 	
-}
-
-func dbConnect() *sql.DB {
-	pgConninfo := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
-		dbHost, dbPort, dbUser, dbName, dbSSLMode)
-	// connect to db
-	db, err := sql.Open(dbDriver, pgConninfo)
-	if err != nil {
-		db.Close()
-		log.Fatal(err)
-	}
-
-	// pings db to ensure that's we've successfully connected
-	err = db.Ping()
-	if err != nil {
-		db.Close()
-		log.Fatal(err)
-	}
-	log.Println("db successfully connected")
-
-	return db
-}
-
-// create messages table
-func dbPrepare(db *sql.DB) {
-	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
-										(
-											id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-											sender		UUID NOT NULL,
-											reciever	UUID NOT NULL,
-											message 	VARCHAR(255),
-											isRead		BOOL NOT NULL DEFAULT FALSE,
-											time			TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-										);`
-
-	_, err := db.Exec(sqlStatement)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("database prepared")
 }
 
 // listen on socket
