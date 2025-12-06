@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -9,6 +8,7 @@ import (
 	"database/sql"
 
 	"github.com/ksrzmv/xch/pkg/message"
+	"github.com/ksrzmv/xch/pkg/misc"
 	_ "github.com/lib/pq"
 )
 
@@ -27,18 +27,6 @@ const (
 	listenProto = "tcp"
 )
 
-// trim([]byte, int) ([]byte, error) - trims input byte slice to new byte slice of size n
-func trim(b []byte, n int) ([]byte, error) {
-	if n > len(b) {
-		return nil, errors.New("trimmed slice should have size smaller of or equal to origin slice")
-	}
-	result := make([]byte, n, n)
-	for i := 0; i < n; i++ {
-		result[i] = b[i]
-	}
-	return result, nil
-}
-
 func readMessageFromClient(conn net.Conn) (*message.Message, error) {
 	m := message.Init()
 
@@ -50,7 +38,7 @@ func readMessageFromClient(conn net.Conn) (*message.Message, error) {
 	}
 
 	// trims b to size n
-	readBuf, err = trim(readBuf, n)
+	readBuf, err = misc.Trim(readBuf, n)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +91,7 @@ func handle(conn net.Conn) {
 
 		// sends ack to client
 		sendBuf := []byte("ok")
-		sendMessage := message.Message{"0", m.From, sendBuf}
+		sendMessage := message.Message{m.From, "00000000-0000-0000-0000-000000000000", sendBuf}
 		err = sendMessageToClient(conn, &sendMessage)
 		if err != nil {
 			log.Println(err)

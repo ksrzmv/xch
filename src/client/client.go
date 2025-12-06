@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ksrzmv/xch/pkg/message"
+	"github.com/ksrzmv/xch/pkg/misc"
 )
 
 const (
@@ -64,7 +65,7 @@ func handle(conn net.Conn, id uuid.UUID) {
 	
 	// trims trailing '\n'
 	sendBuf := []byte(readBuf)[:len(readBuf)-1]
-	m := message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), sendBuf}
+	m := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
 	sendBuf, err = m.ToJson()
   if err != nil {
   	conn.Close()
@@ -73,9 +74,25 @@ func handle(conn net.Conn, id uuid.UUID) {
 
   conn.Write(sendBuf)
 
-	answerBuf := make([]byte, 2)
-	_, err = conn.Read(answerBuf)
-	fmt.Println(string(answerBuf))
+	answerBuf := make([]byte, 1024)
+	readBytes, err := conn.Read(answerBuf)
+	if err != nil {
+		conn.Close()
+		log.Fatal(err)
+	}
+
+	answerBuf, err = misc.Trim(answerBuf, readBytes)
+	if err != nil {
+		conn.Close()
+		log.Fatal()
+	}
+
+	recvMessage, err := message.FromJson(answerBuf)
+	if err != nil {
+		conn.Close()
+		log.Fatal(err)
+	}
+	fmt.Println(recvMessage.GetMessage())
 }
 
 func main() {

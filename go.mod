@@ -8,3 +8,5 @@ require (
 )
 
 replace github.com/ksrzmv/xch/pkg/message => ./pkg/message
+
+replace github.com/ksrzmv/xch/pkg/misc => ./pkg/misc

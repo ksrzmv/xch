@@ -40,3 +40,7 @@ func FromJson(b []byte) (*Message, error) {
 	}
 	return m, err
 }
+
+func (m Message) GetMessage() string {
+	return string(m.Msg)
+}
