@@ -75,7 +75,7 @@ func handle(conn net.Conn, id uuid.UUID) {
 		conn.Close()
 		log.Fatal(err)
 	}
-	fmt.Println(recvMessage.GetMessage())
+	fmt.Printf("%s> %s\n", recvMessage.From, recvMessage.GetMessage())
 }
 
 func main() {

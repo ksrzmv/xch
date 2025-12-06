@@ -25,6 +25,8 @@ const (
 
 // handle(net.Conn) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
+	log.SetPrefix("handle conn: ")
+	log.Printf("recieved connection from %s\n", conn.RemoteAddr().String())
 	db := dbConnect()
 	for {
 		m, err := misc.ReadMessageFrom(conn)
