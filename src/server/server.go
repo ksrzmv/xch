@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -41,74 +40,60 @@ func trim(b []byte, n int) ([]byte, error) {
 }
 
 // handle(net.Conn, *sql.DB) - handles client connections: reply to requests, stores info in DB
-func handle(conn net.Conn, db *sql.DB) {
+func handle(conn net.Conn) {
+	db := dbConnect()
 	for {
-		b := make([]byte, BUFFER_SIZE)
-		n, err := conn.Read(b)
+		m := message.Init()
+		readBuf := make([]byte, BUFFER_SIZE)
+
+		n, err := conn.Read(readBuf)
 		if err != nil {
-			log.Print(err)
+			log.Println(err)
 			conn.Close()
 			break
 		}
 
 		// trims b to size n
-		b, err = trim(b, n)
+		readBuf, err = trim(readBuf, n)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
-		m := message.Init()
-
-		err = json.Unmarshal(b, &m)
+		m, err = message.FromJson([]byte(readBuf))
 		if err != nil {
-			log.Println("unmarshal err")
+			log.Println(err)
 			conn.Close()
-			log.Fatal(err)
+			break
 		}
-		fmt.Println(m)
+		fmt.Println(*m)
 
 		// insert message into database
-		sqlStatement := fmt.Sprintf("INSERT INTO messages (sender, reciever, message) VALUES ('%s', '%s', '%s');", m.From, m.To, m.Msg)
+		sqlStatement := `
+					INSERT INTO messages (sender, reciever, message) VALUES ($1, $2, $3)
+					RETURNING id`
 
-		fmt.Println(sqlStatement)
-
-		_, err = db.Exec(sqlStatement)
+		_, err = db.Exec(sqlStatement, m.From, m.To, m.Msg)
 		if err != nil {
-			log.Println("db exec error")
 			log.Println(err)
-		}
-
-		conn.Write(b)
-		if err != nil {
-			log.Println("conn write error")
-			log.Print(err)
 			conn.Close()
 			break
 		}
 
-		log.Printf("sent message `%s` to %s\n", b, conn.RemoteAddr().String())
-	}
+		sendBuf := []byte("ok")
+		conn.Write(sendBuf)
+		if err != nil {
+			log.Println(err)
+			conn.Close()
+			break
+		}
+		log.Printf("send message '%s' to client", sendBuf)
+
+  }
+	
 }
 
-func dbPrepare(db *sql.DB) {
-	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
-										(
-											id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-											sender		UUID NOT NULL,
-											reciever	UUID NOT NULL,
-											message 	VARCHAR(255),
-											time			TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-										);`
-
-	_, err := db.Exec(sqlStatement)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("database prepared")
-}
-
-func main() {
+func dbConnect() *sql.DB {
 	pgConninfo := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbName, dbSSLMode)
 	db, err := sql.Open(dbDriver, pgConninfo)
@@ -122,8 +107,28 @@ func main() {
 	}
 	log.Println("db successfully connected")
 
-	dbPrepare(db)
+	return db
+}
 
+func dbPrepare(db *sql.DB) {
+	sqlStatement := `CREATE TABLE IF NOT EXISTS messages 
+										(
+											id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+											sender		UUID NOT NULL,
+											reciever	UUID NOT NULL,
+											message 	VARCHAR(255),
+											isRead		BOOL NOT NULL DEFAULT FALSE,
+											time			TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+										);`
+
+	_, err := db.Exec(sqlStatement)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("database prepared")
+}
+
+func listen() net.Listener {
 	socket := fmt.Sprintf("%s:%s", listenHost, listenPort)
 	ln, err := net.Listen(listenProto, socket)
 	if err != nil {
@@ -131,12 +136,21 @@ func main() {
 	}
 	log.Printf("start listening on %s %s\n", listenProto, socket)
 
+	return ln
+}
+
+func main() {
+	db := dbConnect()
+	dbPrepare(db)
+
+	ln := listen()
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			panic(err)
 		}
 
-		go handle(conn, db)
+		go handle(conn)
 	}
 }

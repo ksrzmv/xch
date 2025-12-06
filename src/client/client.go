@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -57,19 +56,26 @@ func handle(conn net.Conn, id uuid.UUID) {
 
 	// TODO: possible overflow. limit the input text string.
 	// TODO: implement the multiline messages
-	b, err := reader.ReadString('\n')
+	readBuf, err := reader.ReadString('\n')
 	if err != nil {
 		conn.Close()
 		log.Fatal(err)
 	}
-	fmt.Println(b)
-  m, err := json.Marshal(message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), []byte(b)})
+	
+	// trims trailing '\n'
+	sendBuf := []byte(readBuf)[:len(readBuf)-1]
+	m := message.Message{"79e60d11-f430-4e7c-9202-dbdb58239131", id.String(), sendBuf}
+	sendBuf, err = m.ToJson()
   if err != nil {
   	conn.Close()
   	log.Fatal(err)
   }
 
-  conn.Write(m)
+  conn.Write(sendBuf)
+
+	answerBuf := make([]byte, 2)
+	_, err = conn.Read(answerBuf)
+	fmt.Println(string(answerBuf))
 }
 
 func main() {
