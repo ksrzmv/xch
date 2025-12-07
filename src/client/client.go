@@ -50,32 +50,50 @@ func getIdFromFile(filepath string) uuid.UUID {
 }
 
 func handle(conn net.Conn, id uuid.UUID) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("> ")
-
-	// TODO: possible overflow. limit the input text string.
-	// TODO: implement the multiline messages
-	readBuf, err := reader.ReadString('\n')
-	if err != nil {
-		conn.Close()
-		log.Fatal(err)
-	}
-	
-	// trims trailing '\n'
-	sendBuf := []byte(readBuf)[:len(readBuf)-1]
-	sendMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
-	err = misc.SendMessageTo(conn, &sendMessage)
+	// send id to server to check new unread messages
+	initMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), nil}
+	err := misc.SendMessageTo(conn, &initMessage)
 	if err != nil {
 		conn.Close()
 		log.Fatal(err)
 	}
 
 	recvMessage, err := misc.ReadMessageFrom(conn)
-	if err != nil {
-		conn.Close()
-		log.Fatal(err)
+	fmt.Printf("%s > %s\n", recvMessage.From, recvMessage.GetMessage())
+
+
+	// ---
+	for {
+	  reader := bufio.NewReader(os.Stdin)
+	  fmt.Printf("> ")
+
+	  // TODO: possible overflow. limit the input text string.
+	  // TODO: implement the multiline messages
+	  readBuf, err := reader.ReadString('\n')
+	  if err != nil {
+	  	conn.Close()
+	  	log.Fatal(err)
+	  }
+	  
+	  // trims trailing '\n'
+	  sendBuf := []byte(readBuf)[:len(readBuf)-1]
+		if len(sendBuf) == 0 {
+			continue
+		}
+	  sendMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
+	  err = misc.SendMessageTo(conn, &sendMessage)
+	  if err != nil {
+	  	conn.Close()
+	  	log.Fatal(err)
+	  }
+
+	  recvMessage, err = misc.ReadMessageFrom(conn)
+	  if err != nil {
+	  	conn.Close()
+	  	log.Fatal(err)
+	  }
+	  fmt.Printf("%s> %s\n", recvMessage.From, recvMessage.GetMessage())
 	}
-	fmt.Printf("%s> %s\n", recvMessage.From, recvMessage.GetMessage())
 }
 
 func main() {
@@ -98,8 +116,6 @@ func main() {
 	}
 	log.Printf("successfully connected to %s\n", socket)
 
-	for {
-		handle(conn, id)
-	}
+	handle(conn, id)
 
 }

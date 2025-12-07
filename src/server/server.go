@@ -28,6 +28,55 @@ func handle(conn net.Conn) {
 	log.SetPrefix("handle conn: ")
 	log.Printf("recieved connection from %s\n", conn.RemoteAddr().String())
 	db := dbConnect()
+
+
+	// check for unread messages
+	initMessage, err := misc.ReadMessageFrom(conn)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
+	id := initMessage.From
+
+	sqlStatement := `
+										SELECT sender, reciever, message FROM messages WHERE reciever = $1 AND
+										  isRead = false;
+									`
+	unreadMessages, err := db.Query(sqlStatement, id)
+	if err != nil {
+		log.Println(err)
+		conn.Close()
+		return
+	}
+	defer unreadMessages.Close()
+	for unreadMessages.Next() {
+		var sender 		string
+		var reciever 	string
+		var msg				[]byte
+		err = unreadMessages.Scan(&sender, &reciever, &msg)
+		if err != nil {
+			log.Println(err)
+			conn.Close()
+			return
+		}
+		sendMessage := message.Message{sender, reciever, msg}
+		err = misc.SendMessageTo(conn, &sendMessage)
+		if err != nil {
+			log.Println(err)
+			conn.Close()
+			return
+		}
+	}
+
+	err = unreadMessages.Err()
+	if err != nil {
+		log.Println(err)
+		conn.Close()
+		return
+	}
+	// ---
+
 	for {
 		m, err := misc.ReadMessageFrom(conn)
 		if err != nil {
