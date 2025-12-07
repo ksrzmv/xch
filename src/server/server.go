@@ -33,7 +33,7 @@ func errorHandler(conn net.Conn, db *sql.DB, err error) {
 
 func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 	sqlStatement := `
-										SELECT sender, reciever, message FROM unread_messages WHERE reciever = $1 AND
+										SELECT id, sender, reciever, message FROM unread_messages WHERE reciever = $1 AND
 										  isRead = false;
 									`
 	unreadMessages, err := db.Query(sqlStatement, id)
@@ -46,10 +46,11 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 
 	defer unreadMessages.Close()
 	for unreadMessages.Next() {
+		var messageId	string
 		var sender 		string
 		var reciever 	string
 		var msg				[]byte
-		err = unreadMessages.Scan(&sender, &reciever, &msg)
+		err = unreadMessages.Scan(&messageId, &sender, &reciever, &msg)
 		if err != nil {
 			return err
 		}
@@ -61,6 +62,24 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 			return err
 		}
 		haveUnreadMessages = true
+
+		// TODO: make transaction
+		// TODO: move this transaction to PGSQL fuction
+		sqlStatement = 	`
+											INSERT INTO read_messages(id, sender, reciever, message) VALUES ($1, $2, $3, $4);
+										`
+		_, err = db.Query(sqlStatement, messageId, sender, reciever, msg)
+		if err != nil {
+			return err
+		}
+		sqlStatement = 	`
+											DELETE FROM unread_messages WHERE id = $1;
+										`
+		_, err = db.Query(sqlStatement, messageId)
+		if err != nil {
+			return err
+		}
+		// --------
 	}
 
 	err = unreadMessages.Err()
