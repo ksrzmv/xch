@@ -1,10 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
 
+	"github.com/google/uuid"
 	"github.com/ksrzmv/xch/pkg/message"
 	"github.com/ksrzmv/xch/pkg/misc"
 	_ "github.com/lib/pq"
@@ -23,6 +25,57 @@ const (
 	listenProto = "tcp"
 )
 
+func errorHandler(conn net.Conn, db *sql.DB, err error) {
+	db.Close()
+	conn.Close()
+	log.Println(err)
+}
+
+func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
+	sqlStatement := `
+										SELECT sender, reciever, message FROM unread_messages WHERE reciever = $1 AND
+										  isRead = false;
+									`
+	unreadMessages, err := db.Query(sqlStatement, id)
+	if err != nil {
+		errorHandler(conn, db, err)
+		return err
+	}
+
+	haveUnreadMessages := false
+
+	defer unreadMessages.Close()
+	for unreadMessages.Next() {
+		var sender 		string
+		var reciever 	string
+		var msg				[]byte
+		err = unreadMessages.Scan(&sender, &reciever, &msg)
+		if err != nil {
+			return err
+		}
+
+		sendMessage := message.Message{sender, reciever, msg}
+		err = misc.SendMessageTo(conn, &sendMessage)
+		if err != nil {
+			errorHandler(conn, db, err)
+			return err
+		}
+		haveUnreadMessages = true
+	}
+
+	err = unreadMessages.Err()
+	log.Println(err)
+	if err != nil {
+		errorHandler(conn, db, err)
+		return err
+	}
+
+	if haveUnreadMessages == false {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // handle(net.Conn) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
 	log.SetPrefix("handle conn: ")
@@ -33,49 +86,41 @@ func handle(conn net.Conn) {
 	// check for unread messages
 	initMessage, err := misc.ReadMessageFrom(conn)
 	if err != nil {
-		conn.Close()
+		errorHandler(conn, db, err)
 		return
 	}
+	log.Println("recieved init message")
 
 	id := initMessage.From
-
 	sqlStatement := `
-										SELECT sender, reciever, message FROM messages WHERE reciever = $1 AND
-										  isRead = false;
+										SELECT id FROM users WHERE id = $1;
 									`
-	unreadMessages, err := db.Query(sqlStatement, id)
-	if err != nil {
-		log.Println(err)
-		conn.Close()
-		return
+	tmpBuf := make([]byte, 32)
+	err = db.QueryRow(sqlStatement, id).Scan(&tmpBuf)
+	switch err {
+		case sql.ErrNoRows:
+			sqlStatement = 	`
+												INSERT INTO users(id) VALUES ($1);
+											`
+			_, err = db.Exec(sqlStatement, id)
+			if err != nil {
+				errorHandler(conn, db, err)
+			}
+	  case nil:
+			tmpId, err := uuid.Parse(id)
+			if err != nil {
+				errorHandler(conn, db, err)
+			}
+			err = handleUnreadMessages(conn, db, tmpId)
+			if err != nil {
+				err = misc.SendMessageTo(conn, &message.Message{initMessage.From, initMessage.To, []byte("No unread messages")})
+				if err != nil {
+					errorHandler(conn, db, err)
+				}
+			}
+		default:
+			errorHandler(conn, db, err)
 	}
-	defer unreadMessages.Close()
-	for unreadMessages.Next() {
-		var sender 		string
-		var reciever 	string
-		var msg				[]byte
-		err = unreadMessages.Scan(&sender, &reciever, &msg)
-		if err != nil {
-			log.Println(err)
-			conn.Close()
-			return
-		}
-		sendMessage := message.Message{sender, reciever, msg}
-		err = misc.SendMessageTo(conn, &sendMessage)
-		if err != nil {
-			log.Println(err)
-			conn.Close()
-			return
-		}
-	}
-
-	err = unreadMessages.Err()
-	if err != nil {
-		log.Println(err)
-		conn.Close()
-		return
-	}
-	// ---
 
 	for {
 		m, err := misc.ReadMessageFrom(conn)
@@ -89,7 +134,7 @@ func handle(conn net.Conn) {
 
 		// insert message into database
 		sqlStatement := `
-											INSERT INTO messages (sender, reciever, message) VALUES ($1, $2, $3)
+											INSERT INTO unread_messages (sender, reciever, message) VALUES ($1, $2, $3)
 											RETURNING id;
 										`
 		_, err = db.Exec(sqlStatement, m.From, m.To, m.Msg)
