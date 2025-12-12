@@ -70,20 +70,21 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 										`
 		_, err = db.Query(sqlStatement, messageId, sender, reciever, msg)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
-		sqlStatement = 	`
+		sqlStatement =  `
 											DELETE FROM unread_messages WHERE id = $1;
 										`
 		_, err = db.Query(sqlStatement, messageId)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 		// --------
 	}
 
 	err = unreadMessages.Err()
-	log.Println(err)
 	if err != nil {
 		errorHandler(conn, db, err)
 		return err
@@ -97,7 +98,6 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 
 // handle(net.Conn) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
-	log.SetPrefix("handle conn: ")
 	log.Printf("recieved connection from %s\n", conn.RemoteAddr().String())
 	db := dbConnect()
 
@@ -108,7 +108,7 @@ func handle(conn net.Conn) {
 		errorHandler(conn, db, err)
 		return
 	}
-	log.Println("recieved init message")
+	log.Println("recieved init message from user")
 
 	id := initMessage.From
 	sqlStatement := `
@@ -125,6 +125,7 @@ func handle(conn net.Conn) {
 			if err != nil {
 				errorHandler(conn, db, err)
 			}
+			log.Printf("added user %s to DB\n", id)
 	  case nil:
 			tmpId, err := uuid.Parse(id)
 			if err != nil {
@@ -144,8 +145,7 @@ func handle(conn net.Conn) {
 	for {
 		m, err := misc.ReadMessageFrom(conn)
 		if err != nil {
-			log.Println(err)
-			conn.Close()
+			errorHandler(conn, db, err)
 			break
 		}
 		// prints unmarshalled message to stdout
@@ -158,8 +158,7 @@ func handle(conn net.Conn) {
 										`
 		_, err = db.Exec(sqlStatement, m.From, m.To, m.Msg)
 		if err != nil {
-			log.Println(err)
-			conn.Close()
+			errorHandler(conn, db, err)
 			break
 		}
 
@@ -168,8 +167,7 @@ func handle(conn net.Conn) {
 		sendMessage := message.Message{m.From, "00000000-0000-0000-0000-000000000000", sendBuf}
 		err = misc.SendMessageTo(conn, &sendMessage)
 		if err != nil {
-			log.Println(err)
-			conn.Close()
+			errorHandler(conn, db, err)
 			break
 		}
 		log.Printf("sent message `%s` to `%s`\n", sendMessage.GetMessage(), m.From)
@@ -190,6 +188,7 @@ func listen() net.Listener {
 }
 
 func main() {
+	log.SetPrefix("main: ")
 	db := dbConnect()
 	dbPrepare(db)
 
@@ -198,7 +197,8 @@ func main() {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			panic(err)
+			errorHandler(conn, db, err)
+			continue
 		}
 
 		go handle(conn)

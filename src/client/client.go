@@ -58,6 +58,9 @@ func handle(conn net.Conn, id uuid.UUID) {
 		log.Fatal(err)
 	}
 
+	// TODO: add sync message from server with
+	//			 number of unread messages to print
+	//       them all
 	recvMessage, err := misc.ReadMessageFrom(conn)
 	fmt.Printf("%s > %s\n", recvMessage.From, recvMessage.GetMessage())
 

@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 )
 
 type Message struct {
@@ -21,21 +22,21 @@ func Init() *Message {
 }
 
 func (m Message) ToJson() ([]byte, error) {
-	log.SetPrefix("message:ToJson:")
+	log.SetPrefix("message:ToJson: ")
 	b, err := json.Marshal(m)
 	if err != nil {
-		log.Println("Error marshalling message to json")
+		slog.Error("Error marshalling message to json")
 		return nil, err
 	}
 	return b, nil
 }
 
 func FromJson(b []byte) (*Message, error) {
-	log.SetPrefix("message:FromJson:")
+	log.SetPrefix("message:FromJson: ")
 	m := Init()
 	err := json.Unmarshal(b, m)
 	if err != nil {
-		log.Println("Error unmarshalling message from json")
+		slog.Error("Error unmarshalling message from json")
 		return nil, err
 	}
 	return m, err
