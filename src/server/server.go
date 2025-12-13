@@ -65,12 +65,18 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 		}
 		haveUnreadMessages = true
 
-		// TODO: make transaction
 		// TODO: move this transaction to PGSQL fuction
+		tx, err := db.Begin()
+		if err != nil {
+			errorHandler(conn, db, err)
+			return err
+		}
+		defer tx.Rollback()
+
 		sqlStatement = 	`
 											INSERT INTO read_messages(id, sender, reciever, message) VALUES ($1, $2, $3, $4);
 										`
-		_, err = db.Query(sqlStatement, messageId, sender, reciever, msg)
+		_, err = tx.Exec(sqlStatement, messageId, sender, reciever, msg)
 		if err != nil {
 			slog.Error("failed insert message to read_messages", slog.Any("err_msg", err))
 			return err
@@ -78,9 +84,14 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 		sqlStatement =  `
 											DELETE FROM unread_messages WHERE id = $1;
 										`
-		_, err = db.Query(sqlStatement, messageId)
+		_, err = tx.Exec(sqlStatement, messageId)
 		if err != nil {
 			slog.Error("failed delete message to unread_messages", slog.Any("err_msg", err))
+			return err
+		}
+
+		if err = tx.Commit(); err != nil {
+			errorHandler(conn, db, err)
 			return err
 		}
 		// --------
