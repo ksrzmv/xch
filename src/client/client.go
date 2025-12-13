@@ -89,6 +89,7 @@ func handle(conn net.Conn, id uuid.UUID) {
 			continue
 		}
 
+		// TODO: add checks that recieverId is uuid
 	  flag.Parse()
 	  recieverId := *reciever
 

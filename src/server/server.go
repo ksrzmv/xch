@@ -114,16 +114,15 @@ func handle(conn net.Conn) {
 	slog.Info("recieved connection", slog.String("remote_addr", conn.RemoteAddr().String()))
 	db := dbConnect()
 
-
 	// check for unread messages
 	initMessage, err := misc.ReadMessageFrom(conn)
 	if err != nil {
 		errorHandler(conn, db, err)
 		return
 	}
-	slog.Info("recieved init message", slog.String("user_id", initMessage.From), slog.String("remote_addr", conn.RemoteAddr().String()))
+	slog.Info("recieved init message", slog.String("user_id", initMessage.GetFrom()), slog.String("remote_addr", conn.RemoteAddr().String()))
 
-	id := initMessage.From
+	id := initMessage.GetFrom()
 	sqlStatement := `
 										SELECT id FROM users WHERE id = $1;
 									`
@@ -146,7 +145,7 @@ func handle(conn net.Conn) {
 			}
 			err = handleUnreadMessages(conn, db, tmpId)
 			if err != nil {
-				err = misc.SendMessageTo(conn, &message.Message{initMessage.From, initMessage.To, []byte("No unread messages")})
+				err = misc.SendMessageTo(conn, &message.Message{initMessage.GetFrom(), initMessage.GetTo(), []byte("No unread messages")})
 				if err != nil {
 					errorHandler(conn, db, err)
 				}
@@ -169,7 +168,7 @@ func handle(conn net.Conn) {
 											INSERT INTO unread_messages (sender, reciever, message) VALUES ($1, $2, $3)
 											RETURNING id;
 										`
-		_, err = db.Exec(sqlStatement, m.From, m.To, m.Msg)
+		_, err = db.Exec(sqlStatement, m.GetFrom(), m.GetTo(), m.GetMessage())
 		if err != nil {
 			errorHandler(conn, db, err)
 			break
@@ -177,13 +176,13 @@ func handle(conn net.Conn) {
 
 		// sends ack to client
 		sendBuf := []byte("ok")
-		sendMessage := message.Message{m.From, "00000000-0000-0000-0000-000000000000", sendBuf}
+		sendMessage := message.Message{m.GetFrom(), "00000000-0000-0000-0000-000000000000", sendBuf}
 		err = misc.SendMessageTo(conn, &sendMessage)
 		if err != nil {
 			errorHandler(conn, db, err)
 			break
 		}
-		slog.Debug("sent message to user", slog.String("message", sendMessage.GetMessage()), slog.String("user_id", m.From))
+		slog.Debug("sent message to user", slog.String("message", sendMessage.GetMessage()), slog.String("user_id", m.GetFrom()))
   }
 	
 }

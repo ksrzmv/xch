@@ -45,3 +45,12 @@ func FromJson(b []byte) (*Message, error) {
 func (m Message) GetMessage() string {
 	return string(m.Msg)
 }
+
+func (m Message) GetTo() string {
+	return m.To
+}
+
+func (m Message) GetFrom() string {
+	return m.From
+}
+
