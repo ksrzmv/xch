@@ -25,7 +25,7 @@ func (m Message) ToJson() ([]byte, error) {
 	log.SetPrefix("message:ToJson: ")
 	b, err := json.Marshal(m)
 	if err != nil {
-		slog.Error("Error marshalling message to json")
+		slog.Error("Error marshalling message to json", slog.Any("err_msg", err))
 		return nil, err
 	}
 	return b, nil
@@ -36,7 +36,7 @@ func FromJson(b []byte) (*Message, error) {
 	m := Init()
 	err := json.Unmarshal(b, m)
 	if err != nil {
-		slog.Error("Error unmarshalling message from json")
+		slog.Error("Error unmarshalling message from json", slog.Any("err_msg", err))
 		return nil, err
 	}
 	return m, err

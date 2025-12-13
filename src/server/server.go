@@ -106,6 +106,12 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 	if haveUnreadMessages == false {
 		return sql.ErrNoRows
 	}
+	err = misc.SendMessageTo(conn, &message.Message{id.String(), "00000000-0000-0000-0000-000000000000", nil})
+	if err != nil {
+		errorHandler(conn, db, err)
+		return err
+	}
+
 	return nil
 }
 
@@ -122,6 +128,7 @@ func handle(conn net.Conn) {
 	}
 	slog.Info("recieved init message", slog.String("user_id", initMessage.GetFrom()), slog.String("remote_addr", conn.RemoteAddr().String()))
 
+	// check that user exists in table 'users'
 	id := initMessage.GetFrom()
 	sqlStatement := `
 										SELECT id FROM users WHERE id = $1;
@@ -130,6 +137,7 @@ func handle(conn net.Conn) {
 	err = db.QueryRow(sqlStatement, id).Scan(&tmpBuf)
 	switch err {
 		case sql.ErrNoRows:
+			// if not, create
 			sqlStatement = 	`
 												INSERT INTO users(id) VALUES ($1);
 											`
@@ -139,13 +147,15 @@ func handle(conn net.Conn) {
 			}
 			slog.Debug("added user to DB", slog.String("user_id", id))
 	  case nil:
-			tmpId, err := uuid.Parse(id)
+			// otherwise send unread messages to user
+			userId, err := uuid.Parse(id)
 			if err != nil {
 				errorHandler(conn, db, err)
 			}
-			err = handleUnreadMessages(conn, db, tmpId)
+
+			err = handleUnreadMessages(conn, db, userId)
 			if err != nil {
-				err = misc.SendMessageTo(conn, &message.Message{initMessage.GetFrom(), initMessage.GetTo(), []byte("No unread messages")})
+				err = misc.SendMessageTo(conn, &message.Message{userId.String(), initMessage.GetTo(), nil})
 				if err != nil {
 					errorHandler(conn, db, err)
 				}
@@ -161,7 +171,7 @@ func handle(conn net.Conn) {
 			break
 		}
 		// prints unmarshalled message to stdout
-		fmt.Println(*m)
+		// fmt.Println(*m)
 
 		// insert message into database
 		sqlStatement := `

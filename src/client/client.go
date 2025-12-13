@@ -60,14 +60,19 @@ func handle(conn net.Conn, id uuid.UUID) {
 		log.Fatal(err)
 	}
 
-	// TODO: add sync message from server with
-	//			 number of unread messages to print
-	//       them all
-	recvMessage, err := misc.ReadMessageFrom(conn)
-	if err != nil {
-		log.Println(err)
+	for {
+		recvMessage, err := misc.ReadMessageFrom(conn)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		if len(recvMessage.GetMessage()) == 0 {
+			fmt.Printf("%s\n", "no more unread messages")
+			break
+		} else {
+			fmt.Printf("%s> %s\n", recvMessage.From, recvMessage.GetMessage())
+		}
 	}
-	fmt.Printf("%s > %s\n", recvMessage.From, recvMessage.GetMessage())
 
 
 	// ---
@@ -127,7 +132,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("successfully connected to %s\n", socket)
+
+	fmt.Println("xch connected")
 
 	handle(conn, id)
 
