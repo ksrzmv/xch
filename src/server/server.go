@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/ksrzmv/xch/pkg/message"
@@ -28,7 +30,7 @@ const (
 func errorHandler(conn net.Conn, db *sql.DB, err error) {
 	db.Close()
 	conn.Close()
-	log.Println(err)
+	slog.Error("Error processing request", slog.String("remote_addr", conn.RemoteAddr().String()), slog.Any("err_msg", err))
 }
 
 func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
@@ -70,7 +72,7 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 										`
 		_, err = db.Query(sqlStatement, messageId, sender, reciever, msg)
 		if err != nil {
-			log.Println(err)
+			slog.Error("failed insert message to read_messages", slog.Any("err_msg", err))
 			return err
 		}
 		sqlStatement =  `
@@ -78,7 +80,7 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 										`
 		_, err = db.Query(sqlStatement, messageId)
 		if err != nil {
-			log.Println(err)
+			slog.Error("failed delete message to unread_messages", slog.Any("err_msg", err))
 			return err
 		}
 		// --------
@@ -98,7 +100,7 @@ func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 
 // handle(net.Conn) - handles client connections: reply to requests, stores info in DB
 func handle(conn net.Conn) {
-	log.Printf("recieved connection from %s\n", conn.RemoteAddr().String())
+	slog.Info("recieved connection", slog.String("remote_addr", conn.RemoteAddr().String()))
 	db := dbConnect()
 
 
@@ -108,7 +110,7 @@ func handle(conn net.Conn) {
 		errorHandler(conn, db, err)
 		return
 	}
-	log.Println("recieved init message from user")
+	slog.Info("recieved init message", slog.String("user_id", initMessage.From), slog.String("remote_addr", conn.RemoteAddr().String()))
 
 	id := initMessage.From
 	sqlStatement := `
@@ -125,7 +127,7 @@ func handle(conn net.Conn) {
 			if err != nil {
 				errorHandler(conn, db, err)
 			}
-			log.Printf("added user %s to DB\n", id)
+			slog.Debug("added user to DB", slog.String("user_id", id))
 	  case nil:
 			tmpId, err := uuid.Parse(id)
 			if err != nil {
@@ -170,7 +172,7 @@ func handle(conn net.Conn) {
 			errorHandler(conn, db, err)
 			break
 		}
-		log.Printf("sent message `%s` to `%s`\n", sendMessage.GetMessage(), m.From)
+		slog.Info("sent message to user", slog.String("message", sendMessage.GetMessage()), slog.String("user_id", m.From))
   }
 	
 }
@@ -182,12 +184,14 @@ func listen() net.Listener {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("start listening on %s %s\n", listenProto, socket)
+	slog.Info("listening...", slog.String("proto", listenProto), slog.String("socket", socket))
 
 	return ln
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 	log.SetPrefix("main: ")
 	db := dbConnect()
 	dbPrepare(db)
