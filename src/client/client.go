@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -50,6 +51,7 @@ func getIdFromFile(filepath string) uuid.UUID {
 }
 
 func handle(conn net.Conn, id uuid.UUID) {
+	reciever := flag.String("to", "00000000-0000-0000-0000-000000000000", "recipent of messages")
 	// send id to server to check new unread messages
 	initMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), nil}
 	err := misc.SendMessageTo(conn, &initMessage)
@@ -83,7 +85,11 @@ func handle(conn net.Conn, id uuid.UUID) {
 		if len(sendBuf) == 0 {
 			continue
 		}
-	  sendMessage := message.Message{"00000000-0000-0000-0000-000000000000", id.String(), sendBuf}
+
+	  flag.Parse()
+	  recieverId := *reciever
+
+	  sendMessage := message.Message{recieverId, id.String(), sendBuf}
 	  err = misc.SendMessageTo(conn, &sendMessage)
 	  if err != nil {
 	  	conn.Close()
