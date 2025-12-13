@@ -64,6 +64,9 @@ func handle(conn net.Conn, id uuid.UUID) {
 	//			 number of unread messages to print
 	//       them all
 	recvMessage, err := misc.ReadMessageFrom(conn)
+	if err != nil {
+		log.Println(err)
+	}
 	fmt.Printf("%s > %s\n", recvMessage.From, recvMessage.GetMessage())
 
 
@@ -96,7 +99,7 @@ func handle(conn net.Conn, id uuid.UUID) {
 	  	log.Fatal(err)
 	  }
 
-	  recvMessage, err = misc.ReadMessageFrom(conn)
+		recvMessage, err := misc.ReadMessageFrom(conn)
 	  if err != nil {
 	  	conn.Close()
 	  	log.Fatal(err)

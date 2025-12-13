@@ -36,7 +36,7 @@ func errorHandler(conn net.Conn, db *sql.DB, err error) {
 func handleUnreadMessages(conn net.Conn, db *sql.DB, id uuid.UUID) error {
 	sqlStatement := `
 										SELECT id, sender, reciever, message FROM unread_messages WHERE reciever = $1 AND
-										  isRead = false;
+										  isRead = false ORDER BY id;
 									`
 	unreadMessages, err := db.Query(sqlStatement, id)
 	if err != nil {
@@ -183,7 +183,7 @@ func handle(conn net.Conn) {
 			errorHandler(conn, db, err)
 			break
 		}
-		slog.Info("sent message to user", slog.String("message", sendMessage.GetMessage()), slog.String("user_id", m.From))
+		slog.Debug("sent message to user", slog.String("message", sendMessage.GetMessage()), slog.String("user_id", m.From))
   }
 	
 }
