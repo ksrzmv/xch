@@ -42,6 +42,10 @@ func FromJson(b []byte) (*Message, error) {
 	return m, err
 }
 
+func (m Message) GetMessageRaw() []byte {
+	return m.Msg
+}
+
 func (m Message) GetMessage() string {
 	return string(m.Msg)
 }

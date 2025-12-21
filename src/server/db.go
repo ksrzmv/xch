@@ -42,7 +42,7 @@ func dbPrepare(db *sql.DB) {
 											id 					BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 											reciever		UUID REFERENCES users(id),
 											sender			UUID REFERENCES users(id),
-											message 		VARCHAR(255),
+											message 		BYTEA,
 											isRead			BOOL NOT NULL DEFAULT FALSE CHECK (isRead = FALSE),
 											created_at	TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 										);`
@@ -51,7 +51,7 @@ func dbPrepare(db *sql.DB) {
 											id 				BIGINT PRIMARY KEY,
 											reciever	UUID REFERENCES users(id),
 											sender		UUID REFERENCES users(id),
-											message		VARCHAR(255),
+											message		BYTEA,
 											isRead		BOOL NOT NULL DEFAULT TRUE CHECK (isRead = TRUE),
 											read_at		TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 										);`

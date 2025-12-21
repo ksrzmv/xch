@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ksrzmv/krypto/krypto"
+
 	"github.com/ksrzmv/xch/pkg/message"
 	"github.com/ksrzmv/xch/pkg/misc"
 )
@@ -70,7 +72,8 @@ func handle(conn net.Conn, id uuid.UUID) {
 			fmt.Printf("%s\n", "no more unread messages")
 			break
 		} else {
-			fmt.Printf("%s> %s\n", recvMessage.From, recvMessage.GetMessage())
+			recvBuf := krypto.Decrypt(recvMessage.GetMessageRaw(), []byte("oleg"))
+			fmt.Printf("%s> %s\n", recvMessage.GetFrom, recvBuf)
 		}
 	}
 
@@ -93,6 +96,8 @@ func handle(conn net.Conn, id uuid.UUID) {
 		if len(sendBuf) == 0 {
 			continue
 		}
+		
+		sendBuf = krypto.Encrypt(sendBuf, []byte("oleg"))
 
 		// TODO: add checks that recieverId is uuid
 	  flag.Parse()
@@ -120,7 +125,7 @@ func main() {
 		log.Println("HOME env is not set. Current directory will be treat as home dir")
 		homePath = "."
 	}
-
+	
 	idFilepath := fmt.Sprintf("%s/%s", homePath, idFilename)
 
 	id := getIdFromFile(idFilepath)
