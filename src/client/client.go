@@ -73,7 +73,7 @@ func handle(conn net.Conn, id uuid.UUID) {
 			break
 		} else {
 			recvBuf := krypto.Decrypt(recvMessage.GetMessageRaw(), []byte("oleg"))
-			fmt.Printf("%s> %s\n", recvMessage.GetFrom, recvBuf)
+			fmt.Printf("%s> %s\n", recvMessage.GetFrom(), recvBuf)
 		}
 	}
 
